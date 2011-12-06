@@ -50,6 +50,10 @@ module.exports = function (inStream) {
                 var ps = spawn('ogr2ogr', [
                     '-f', 'GeoJSON',
                     '-skipfailures',
+                    '-t_srs',
+                    'EPSG:4326',
+                    '-a_srs',
+                    'EPSG:4326',
                     'stdout',
                     files[0],
                 ]);

@@ -25,12 +25,11 @@ $ shp2json ~/citylots.zip 2>/dev/null | head -n5
 {
 "type": "FeatureCollection",
 "features": [
-{ "type": "Feature", "properties": { "MAPBLKLOT": "0001001", "BLKLOT":
+{ "type": "Feature", "properties": { "MAPBLKLOT": "0001001", "BLKLOT": 
 "0001001", "BLOCK_NUM": "0001", "LOT_NUM": "001", "FROM_ST": "", "TO_ST": "",
-"STREET": "", "ST_TYPE": "", "ODD_EVEN": "" }, "geometry": { "type": "Polygon",
-"coordinates": [ [ [ 6006455.879902, 2122549.308040 ], [ 6006437.598115,
-2122678.946560 ], [ 6006718.635610, 2122661.708405 ], [ 6006728.561443,
-2122587.762031 ], [ 6006455.879902, 2122549.308040 ] ] ] } }
+ "STREET": "", "ST_TYPE": "", "ODD_EVEN": "" }, "geometry": { "type": "Polygon",
+ "coordinates": [ [ [ -122.422004, 37.808480 ], [ -122.422076, 37.808835 ], 
+[ -122.421102, 37.808804 ], [ -122.421063, 37.808601 ], [ -122.422004, 37.808480 ] ] ] } }
 ,
 
 ```
