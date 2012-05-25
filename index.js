@@ -54,7 +54,7 @@ module.exports = function (inStream) {
                     'EPSG:4326',
                     '-a_srs',
                     'EPSG:4326',
-                    'stdout',
+                    '/vsistdout/',
                     files[0],
                 ]);
                 ps.stdout.pipe(outStream, { end : false });
