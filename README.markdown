@@ -5,6 +5,8 @@ Convert shapefile zip archives to streaming GeoJSON using
 [ogr2ogr](http://gdal.org) and
 [JSONStream](https://github.com/dominictarr/JSONStream).
 
+[![build status](https://secure.travis-ci.org/substack/shp2json.png)](http://travis-ci.org/substack/shp2json)
+
 example
 =======
 
