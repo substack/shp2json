@@ -34,6 +34,7 @@ module.exports = function (inStream) {
             var s = findit(tmpDir);
             var files = [];
             s.on('file', function (file) {
+                if (file.match(/__MACOSX/)) return;
                 if (file.match(/\.shp$|\.kml$/i)) files.push(file);
             });
             s.on('end', next.ok.bind(null, files));
