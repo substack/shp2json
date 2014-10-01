@@ -20,4 +20,3 @@ var outStream = outFile === '-'
 ;
 
 toJSON(inStream).pipe(outStream);
-if (inStream.resume) inStream.resume();

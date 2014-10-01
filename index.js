@@ -1,22 +1,21 @@
 var spawn = require('child_process').spawn;
+var gdal = require('gdal');
 var fs = require('fs');
 var path = require('path');
 var seq = require('seq');
 var findit = require('findit');
-var BufferedStream = require('morestreams').BufferedStream;
+var through = require('through2');
 
 module.exports = function (inStream) {
     var id = Math.floor(Math.random() * (1<<30)).toString(16);
     var tmpDir = path.join('/tmp', id);
     var zipFile = path.join('/tmp', id + '.zip');
     
-    var outStream = new BufferedStream;
-    outStream.readable = true;
-    outStream.writable = true;
+    var outStream = through.obj();
     
     var zipStream = fs.createWriteStream(zipFile);
     inStream.pipe(zipStream);
-    zipStream.on('error', outStream.emit.bind(outStream, 'error'));
+    zipStream.on('error', outStream.destroy);
     
     seq()
         .par(function () { fs.mkdir(tmpDir, 0700, this) })
@@ -48,27 +47,51 @@ module.exports = function (inStream) {
                     + ' expecting a single file')
             }
             else {
-                var ps = spawn('ogr2ogr', [
-                    '-f', 'GeoJSON',
-                    '-skipfailures',
-                    '-t_srs',
-                    'EPSG:4326',
-                    '-a_srs',
-                    'EPSG:4326',
-                    '/vsistdout/',
-                    files[0],
-                ]);
-                ps.stdout.pipe(outStream, { end : false });
-                ps.stderr.pipe(outStream, { end : false });
+                // var ps = spawn('ogr2ogr', [
+                //     '-f', 'GeoJSON',
+                //     '-skipfailures',
+                //     '-t_srs',
+                //     'EPSG:4326',
+                //     '-a_srs',
+                //     'EPSG:4326',
+                //     '/vsistdout/',
+                //     files[0],
+                // ]);
+                // ps.stdout.pipe(outStream, { end : false });
+                // ps.stderr.pipe(outStream, { end : false });
+                //
+                // var pending = 2;
+                // function onend () { if (--pending === 0) outStream.end() }
+                // ps.stdout.on('end', onend);
+                // ps.stderr.on('end', onend);
+          			var shp = gdal.open(files[0]);
+                console.log(shp.srs)
+                var layers = shp.layers.count();
                 
-                var pending = 2;
-                function onend () { if (--pending === 0) outStream.end() }
-                ps.stdout.on('end', onend);
-                ps.stderr.on('end', onend);
+                var before = '{"type": "FeatureCollection","features": [\n'
+                var after = '\n]}\n'
+                var started = false
+                outStream.push(before)
+                
+                for (var i = 0; i < layers; i++) {
+                  var layer = shp.layers.get(i)
+                  var features = layer.features.count();
+                  for (var j = 0; j < features; j++) {
+          					var feature = layer.features.get(j);
+                    var geom = feature.getGeometry().toJSON();
+          					var fields = feature.fields.toJSON();
+                    var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geom + '}';
+                    if (started) featStr = ',\n' + featStr;
+                    started = true;
+                    outStream.push(featStr);
+                  }
+                }
+
+                outStream.end(after)
             }
         })
         .catch(function (err) {
-            outStream.emit('error', err);
+            outStream.destroy(err);
         })
     ;
     

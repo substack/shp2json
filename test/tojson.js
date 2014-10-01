@@ -1,4 +1,4 @@
-var test = require('tap').test;
+var test = require('tape');
 var toJSON = require('../');
 var fs = require('fs');
 var Stream = require('stream').Stream;
@@ -14,6 +14,7 @@ test('to json', function (t) {
     };
     
     outStream.end = function () {
+      console.log(data)
         var geo = JSON.parse(data);
         t.equal(typeof geo, 'object');
         t.ok(geo.features.length > 100);
