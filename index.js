@@ -64,7 +64,7 @@ module.exports = function (inStream) {
                 // function onend () { if (--pending === 0) outStream.end() }
                 // ps.stdout.on('end', onend);
                 // ps.stderr.on('end', onend);
-          			var shp = gdal.open(files[0]);
+                var shp = gdal.open(files[0]);
                 console.log(shp.srs)
                 var layers = shp.layers.count();
                 
