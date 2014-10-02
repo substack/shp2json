@@ -65,7 +65,6 @@ module.exports = function (inStream) {
                 // ps.stdout.on('end', onend);
                 // ps.stderr.on('end', onend);
                 var shp = gdal.open(files[0]);
-                console.log(shp.srs)
                 var layers = shp.layers.count();
                 
                 var before = '{"type": "FeatureCollection","features": [\n'
@@ -73,14 +72,19 @@ module.exports = function (inStream) {
                 var started = false
                 outStream.push(before)
                 
+                var to = gdal.SpatialReference.fromEPSG(4326);
+                
                 for (var i = 0; i < layers; i++) {
                   var layer = shp.layers.get(i)
+                  var ct = new gdal.CoordinateTransformation(layer.srs, to);
                   var features = layer.features.count();
                   for (var j = 0; j < features; j++) {
                     var feature = layer.features.get(j);
-                    var geom = feature.getGeometry().toJSON();
+                    var geom = feature.getGeometry();
+                    geom.transform(ct);
+                    var geojson = geom.toJSON();
           					var fields = feature.fields.toJSON();
-                    var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geom + '}';
+                    var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geojson + '}';
                     if (started) featStr = ',\n' + featStr;
                     started = true;
                     outStream.push(featStr);
