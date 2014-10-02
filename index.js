@@ -47,23 +47,6 @@ module.exports = function (inStream) {
                     + ' expecting a single file')
             }
             else {
-                // var ps = spawn('ogr2ogr', [
-                //     '-f', 'GeoJSON',
-                //     '-skipfailures',
-                //     '-t_srs',
-                //     'EPSG:4326',
-                //     '-a_srs',
-                //     'EPSG:4326',
-                //     '/vsistdout/',
-                //     files[0],
-                // ]);
-                // ps.stdout.pipe(outStream, { end : false });
-                // ps.stderr.pipe(outStream, { end : false });
-                //
-                // var pending = 2;
-                // function onend () { if (--pending === 0) outStream.end() }
-                // ps.stdout.on('end', onend);
-                // ps.stderr.on('end', onend);
                 var shp = gdal.open(files[0]);
                 var layers = shp.layers.count();
                 
