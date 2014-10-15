@@ -64,7 +64,11 @@ module.exports = function (inStream) {
                   var features = layer.features.count();
                   for (var j = 0; j < features; j++) {
                     var feature = layer.features.get(j);
-                    var geom = feature.getGeometry();
+                    try {
+                        var geom = feature.getGeometry();    
+                    } catch (e) {
+                        continue;
+                    }
                     geom.transform(ct);
                     var geojson = geom.toJSON();
           					var fields = feature.fields.toJSON();
