@@ -61,9 +61,9 @@ module.exports = function (inStream) {
                   var layer = shp.layers.get(i)
                   var srs= layer.srs || gdal.SpatialReference.fromEPSG(4326);
                   var ct = new gdal.CoordinateTransformation(srs, to);
-                  var features = layer.features.count();
-                  for (var j = 0; j < features; j++) {
-                    var feature = layer.features.get(j);
+                  
+                  var feature;
+                  while (feature = layer.features.next()) {
                     try {
                         var geom = feature.getGeometry();    
                     } catch (e) {
