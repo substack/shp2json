@@ -2,8 +2,10 @@ shp2json
 ========
 
 Convert shapefile zip archives to streaming GeoJSON using
-[ogr2ogr](http://gdal.org) and
+[gdal](http://gdal.org) and
 [JSONStream](https://github.com/dominictarr/JSONStream).
+
+Uses the [gdal native addon](https://www.npmjs.org/package/gdal) for node.js. No compilation required on most platforms as pre-compiled binaries will be downloaded automatically when you run `npm install shp2json`. 
 
 [![build status](https://secure.travis-ci.org/substack/shp2json.png)](http://travis-ci.org/substack/shp2json)
 
@@ -57,11 +59,7 @@ Usage: shp2json {infile|-} {outfile|-}
 install
 =======
 
-Make sure you have the `ogr2ogr` command from [gdal](http://gdal.org), as well as the `unzip` command.
-
-```
-sudo apt-get install gdal-bin
-```
+Make sure you have the `unzip` command in your PATH.
 
 To install the library, with [npm](http://npmjs.org) do:
 
