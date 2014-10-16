@@ -19,4 +19,11 @@ var outStream = outFile === '-'
     : fs.createWriteStream(outFile)
 ;
 
-toJSON(inStream).pipe(outStream);
+
+var converter = toJSON(inStream)
+
+converter.on('error', function(e) {
+  console.error('Error:', e)
+})
+
+converter.pipe(outStream);
