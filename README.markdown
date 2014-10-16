@@ -57,7 +57,7 @@ Usage: shp2json {infile|-} {outfile|-}
 install
 =======
 
-Make sure you have the `ogr2ogr` command from [gdal](http://gdal.org).
+Make sure you have the `ogr2ogr` command from [gdal](http://gdal.org), as well as the `unzip` command.
 
 ```
 sudo apt-get install gdal-bin
