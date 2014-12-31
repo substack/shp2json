@@ -93,7 +93,7 @@ module.exports = function (inStream) {
                   
                       geom.transform(currentTransformation);
                       var geojson = geom.toJSON();
-            					var fields = feature.fields.toJSON();
+                      var fields = feature.fields.toJSON();
                       var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geojson + '}';
 
                       if (started) {
