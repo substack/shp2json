@@ -4,15 +4,16 @@ var fs = require('fs');
 var path = require('path');
 var seq = require('seq');
 var findit = require('findit');
-var through = require('through2');
+var duplex = require('duplexify')
+var from = require('from2');
 
 module.exports = function (inStream) {
     var id = Math.floor(Math.random() * (1<<30)).toString(16);
     var tmpDir = path.join('/tmp', id);
     var zipFile = path.join('/tmp', id + '.zip');
     
-    var outStream = through.obj();
-    
+    var outStream = duplex.obj();
+        
     var zipStream = fs.createWriteStream(zipFile);
     inStream.pipe(zipStream);
     zipStream.on('error', outStream.destroy);
@@ -48,38 +49,74 @@ module.exports = function (inStream) {
             }
             else {
                 var shp = gdal.open(files[0]);
-                var layers = shp.layers.count();
+                var layerCount = shp.layers.count();
                 
-                var before = '{"type": "FeatureCollection","features": [\n'
-                var after = '\n]}\n'
-                var started = false
-                outStream.push(before)
+                var before = '{"type": "FeatureCollection","features": [\n';
+                var after = '\n]}\n';
+                var started = false;
+                var currentLayer, currentFeature, currentTransformation;
+                var nextLayer = 0;
                 
                 var to = gdal.SpatialReference.fromEPSG(4326);
                 
-                for (var i = 0; i < layers; i++) {
-                  var layer = shp.layers.get(i)
-                  var srs= layer.srs || gdal.SpatialReference.fromEPSG(4326);
-                  var ct = new gdal.CoordinateTransformation(srs, to);
-                  
-                  var feature;
-                  while (feature = layer.features.next()) {
-                    try {
-                        var geom = feature.getGeometry();    
-                    } catch (e) {
-                        continue;
-                    }
-                    geom.transform(ct);
-                    var geojson = geom.toJSON();
-          					var fields = feature.fields.toJSON();
-                    var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geojson + '}';
-                    if (started) featStr = ',\n' + featStr;
-                    started = true;
-                    outStream.push(featStr);
-                  }
+                function getNextLayer() {
+                  currentLayer = shp.layers.get(nextLayer++);
+                  var srs = currentLayer.srs || gdal.SpatialReference.fromEPSG(4326);
+                  currentTransformation = new gdal.CoordinateTransformation(srs, to);
                 }
+                
+                getNextLayer();
+                
+                var layerStream = from(function(size, next) {
+                  var out = '';
+                  writeNextFeature();
+                  
+                  function writeNextFeature() {
+                      var feature = currentLayer.features.next();
+                      if (!feature) {
+                          // end stream
+                          if (nextLayer === layerCount) {
+                              // push remaining output and end
+                              layerStream.push(out);
+                              layerStream.push(after);
+                              return layerStream.push(null);
+                          }
+                          getNextLayer();
+                          feature = currentLayer.features.next();
+                      }
+                    
+                      try {
+                          var geom = feature.getGeometry();    
+                      } catch (e) {
+                          return writeNextFeature();
+                      }
+                  
+                      geom.transform(currentTransformation);
+                      var geojson = geom.toJSON();
+            					var fields = feature.fields.toJSON();
+                      var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geojson + '}';
 
-                outStream.end(after)
+                      if (started) {
+                          featStr = ',\n' + featStr;
+                      } else {
+                          featStr = before + featStr;
+                      }
+
+                      started = true;
+                      out += featStr;
+
+                      if (out.length >= size) {
+                          next(null, out);
+                      } else {
+                          writeNextFeature();
+                      }
+                  }
+                  
+                })
+                
+                outStream.setReadable(layerStream);
+                outStream.end(after);
+                
             }
         })
         .catch(function (err) {

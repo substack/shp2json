@@ -15,8 +15,8 @@ test('to json', function (t) {
     
     outStream.end = function () {
         var geo = JSON.parse(data);
-        t.equal(typeof geo, 'object');
-        t.ok(geo.features.length > 100);
+        t.equal(typeof geo, 'object', 'is object');
+        t.equal(geo.features.length, 162, 'got 162 features');
         t.end();
     };
     
