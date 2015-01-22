@@ -11,13 +11,13 @@ module.exports = function (inStream) {
     var id = Math.floor(Math.random() * (1<<30)).toString(16);
     var tmpDir = path.join('/tmp', id);
     var zipFile = path.join('/tmp', id + '.zip');
-    
+
     var outStream = duplex.obj();
-        
+
     var zipStream = fs.createWriteStream(zipFile);
     inStream.pipe(zipStream);
     zipStream.on('error', outStream.destroy);
-    
+
     seq()
         .par(function () { fs.mkdir(tmpDir, 0700, this) })
         .par(function () {
@@ -50,27 +50,27 @@ module.exports = function (inStream) {
             else {
                 var shp = gdal.open(files[0]);
                 var layerCount = shp.layers.count();
-                
+
                 var before = '{"type": "FeatureCollection","features": [\n';
                 var after = '\n]}\n';
                 var started = false;
                 var currentLayer, currentFeature, currentTransformation;
                 var nextLayer = 0;
-                
+
                 var to = gdal.SpatialReference.fromEPSG(4326);
-                
+
                 function getNextLayer() {
                   currentLayer = shp.layers.get(nextLayer++);
                   var srs = currentLayer.srs || gdal.SpatialReference.fromEPSG(4326);
                   currentTransformation = new gdal.CoordinateTransformation(srs, to);
                 }
-                
+
                 getNextLayer();
-                
+
                 var layerStream = from(function(size, next) {
                   var out = '';
                   writeNextFeature();
-                  
+
                   function writeNextFeature() {
                       var feature = currentLayer.features.next();
                       if (!feature) {
@@ -84,17 +84,17 @@ module.exports = function (inStream) {
                           getNextLayer();
                           feature = currentLayer.features.next();
                       }
-                    
+
                       try {
-                          var geom = feature.getGeometry();    
+                          var geom = feature.getGeometry();
                       } catch (e) {
                           return writeNextFeature();
                       }
-                  
+
                       geom.transform(currentTransformation);
                       var geojson = geom.toJSON();
                       var fields = feature.fields.toJSON();
-                      var featStr = '{"type": "Feature", "properties": ' + JSON.stringify(fields) + ',"geometry": ' + geojson + '}';
+                      var featStr = '{"type": "Feature", "properties": ' + fields + ',"geometry": ' + geojson + '}';
 
                       if (started) {
                           featStr = ',\n' + featStr;
@@ -111,18 +111,18 @@ module.exports = function (inStream) {
                           writeNextFeature();
                       }
                   }
-                  
+
                 })
-                
+
                 outStream.setReadable(layerStream);
                 outStream.end(after);
-                
+
             }
         })
         .catch(function (err) {
             outStream.destroy(err);
         })
     ;
-    
+
     return outStream;
 };
