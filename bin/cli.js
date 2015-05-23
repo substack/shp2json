@@ -26,8 +26,8 @@ optsToShift.forEach(function(o){
         if(!opts)
             opts = {};
         opts[o.option] = process.argv[indexOfVal];
-        [index, indexOfVal].forEach(function(remove){
-            process.argv.splice(remove,1);
+        [index, indexOfVal].forEach(function(remove,i){
+            process.argv.splice(remove-i,1);
         });
     }
 });

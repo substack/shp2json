@@ -96,12 +96,12 @@ module.exports = function(inStream, opts) {
                             reader.readRecord(function(error, feature) {
                                 if (feature == shp.end) {
                                     // end stream
-                                    console.log(before+out+after);
+                                    // console.log(out+after);
                                     // push remaining output and end
                                     layerStream.push(out);
                                     layerStream.push(after);
+                                    reader.close()
                                     return layerStream.push(null);
-                                    shp.close()
                                 }
                                 if (!feature) return writeNextFeature();
                                 // console.log(feature);
@@ -118,6 +118,7 @@ module.exports = function(inStream, opts) {
 
                                 if (out.length >= size) {
                                     next(null, out);
+                                    out = '';
                                 } else {
                                     writeNextFeature();
                                 }
