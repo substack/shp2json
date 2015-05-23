@@ -9,6 +9,7 @@ var duplex = require('duplexify')
 var from = require('from2');
 var xList = null;
 var shpFileFromArchive = null;
+var shapefileOpts = {};
 
 var _parseOptions = function(opts) {
     if (opts && typeof(opts) === 'object') {
@@ -19,6 +20,16 @@ var _parseOptions = function(opts) {
                 xList = opts.xList.replace(/,/g);
             if (Array.isArray(opts.xList))
                 xList = opts.xList.join(' ');
+        }
+        if (opts.hasOwnProperty('ignoreProperties')) {
+            if (typeof(opts.ignoreProperties) === 'string')
+                shapefileOpts['ignore-properties'] = opts.ignoreProperties === 'true';
+            if (typeof(opts.ignoreProperties) === 'boolean')
+                shapefileOpts['ignore-properties'] = opts.ignoreProperties;
+        }
+        if (opts.hasOwnProperty('xList')) {
+            if (typeof(opts.encoding) === 'string')
+                shapefileOpts.encoding = opts.encoding;
         }
     }
 };
@@ -80,7 +91,7 @@ module.exports = function(inStream, opts) {
                 if (shpFileFromArchive)
                     files = [shpFileFromArchive];
                 // console.log("importing file: " + files[0]);
-                var reader = shp.reader(files[0],{'ignore-properties':true});
+                var reader = shp.reader(files[0], shapefileOpts);
 
                 var before = '{"type": "FeatureCollection","features": [\n';
                 var after = '\n]}\n';

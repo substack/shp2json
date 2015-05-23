@@ -5,7 +5,9 @@ var opts = null;
 
 optsToShift = [
   {cli:'-x', option:'xList'},
-  {cli:'-a', option:'shpFileFromArchive'}
+  {cli:'-a', option:'shpFileFromArchive'},
+  {cli:'-i', option:'ignoreProperties'},
+  {cli:'-e', option:'encoding'}
 ];
 
 //remove options to keep same exsiting cli format
