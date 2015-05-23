@@ -33,9 +33,9 @@
     "duplexify": "^3.2.0",
     "findit": "0.1.x",
     "from2": "^1.2.0",
-    "gdal": "^0.4.1",
     "morestreams": "0.1.x",
     "seq": "0.3.x",
+    "shapefile": "^0.3.0",
     "through2": "^0.6.2"
   },
   "devDependencies": {

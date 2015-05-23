@@ -1,6 +1,6 @@
 var spawn = require('child_process').spawn;
 var exec = require('child_process').exec;
-var gdal = require('gdal');
+var shp = require('shapefile');
 var fs = require('fs');
 var path = require('path');
 var seq = require('seq');
@@ -10,25 +10,25 @@ var from = require('from2');
 var xList = null;
 var shpFileFromArchive = null;
 
-var _parseOptions = function(opts){
-    if(opts && typeof(opts) === 'object'){
-        if(opts.hasOwnProperty('shpFileFromArchive') && typeof(opts.shpFileFromArchive) === 'string')
+var _parseOptions = function(opts) {
+    if (opts && typeof(opts) === 'object') {
+        if (opts.hasOwnProperty('shpFileFromArchive') && typeof(opts.shpFileFromArchive) === 'string')
             shpFileFromArchive = opts.shpFileFromArchive;
-        if(opts.hasOwnProperty('xList')){
-            if(typeof(opts.xList) === 'string')
+        if (opts.hasOwnProperty('xList')) {
+            if (typeof(opts.xList) === 'string')
                 xList = opts.xList.replace(/,/g);
-            if(Array.isArray(opts.xList))
+            if (Array.isArray(opts.xList))
                 xList = opts.xList.join(' ');
         }
     }
 };
 
-module.exports = function (inStream, opts) {
-    var id = Math.floor(Math.random() * (1<<30)).toString(16);
+module.exports = function(inStream, opts) {
+    var id = Math.floor(Math.random() * (1 << 30)).toString(16);
     var tmpDir = path.join('/tmp', id);
     var zipFile = path.join('/tmp', id + '.zip');
     _parseOptions(opts);
-    if(shpFileFromArchive)
+    if (shpFileFromArchive)
         shpFileFromArchive = tmpDir + '/' + shpFileFromArchive;
 
     var outStream = duplex.obj();
@@ -38,136 +38,109 @@ module.exports = function (inStream, opts) {
     zipStream.on('error', outStream.destroy);
 
     seq()
-        .par(function () { fs.mkdir(tmpDir, 0700, this) })
-        .par(function () {
+        .par(function() {
+            fs.mkdir(tmpDir, 0700, this)
+        })
+        .par(function() {
             if (zipStream.closed) this()
             else zipStream.on('close', this.ok)
         })
-        .seq_(function (next) {
-            console.log(xList);
+        .seq_(function(next) {
+            // console.log(xList);
             var ps = null;
-            if(!xList){
-                console.log('spqwn');
-                ps =  spawn('unzip', [ '-d', tmpDir, zipFile ]);
+            if (!xList) {
+                ps = spawn('unzip', ['-d', tmpDir, zipFile]);
+            } else {
+                var toRun = 'unzip ' + zipFile + ' -d ' + tmpDir + ' -x ' + xList;
+                ps = exec(toRun);
             }
-            else{
-                console.log('exec');
-                var toRun = 'unzip '+ zipFile + ' -d ' + tmpDir + ' -x ' + xList;
-                console.log(toRun);
-              ps = exec(toRun);
-          }
 
-            ps.on('exit', function (code) {
+            ps.on('exit', function(code) {
                 next(code < 3 ? null : 'error in unzip: code ' + code)
             });
         })
-        .seq_(function (next) {
+        .seq_(function(next) {
             var s = findit(tmpDir);
             var files = [];
-            s.on('file', function (file) {
+            s.on('file', function(file) {
                 if (file.match(/__MACOSX/)) return;
                 if (file.match(/\.shp$|\.kml$/i)) files.push(file);
             });
             s.on('end', next.ok.bind(null, files));
         })
-        .seq(function (files) {
-            console.log(files);
+        .seq(function(files) {
+            // console.log(files);
             if (files.length === 0) {
                 this('no .shp files found in the archive');
-            }
-            else if (files.length > 1 && !shpFileFromArchive) {
+            } else if (files.length > 2 && !shpFileFromArchive) { //2 to account for .dbf
                 this('multiple .shp files found in the archive,' + ' expecting a single file');
-            }
-            else if (shpFileFromArchive && files.indexOf(shpFileFromArchive) === -1) {
+            } else if (shpFileFromArchive && files.indexOf(shpFileFromArchive) === -1) {
                 this('shpFileFromArchive: ' + shpFileFromArchive + 'does not exist in archive.');
-            }
-            else {
+            } else {
                 if (shpFileFromArchive)
                     files = [shpFileFromArchive];
                 // console.log("importing file: " + files[0]);
-                var shp = gdal.open(files[0]);
-                var layerCount = shp.layers.count();
-                console.log("layerCount: " + layerCount);
+                var reader = shp.reader(files[0],{'ignore-properties':true});
 
                 var before = '{"type": "FeatureCollection","features": [\n';
                 var after = '\n]}\n';
                 var started = false;
                 var currentLayer, currentFeature, currentTransformation;
-                var nextLayer = 0;
-
-                var to = gdal.SpatialReference.fromEPSG(4326);
-                console.log('post spatial');
-                function getNextLayer() {
-                    console.log('getNextLayer');
-                    currentLayer = shp.layers.get(nextLayer++);
-                    var srs = currentLayer.srs || gdal.SpatialReference.fromEPSG(4326);
-                    currentTransformation = new gdal.CoordinateTransformation(srs, to);
-                }
-
-                getNextLayer();
-
+                var firstTime = true;
                 var layerStream = from(function(size, next) {
-                  var out = '';
-                  writeNextFeature();
+                    var out = '';
+                    writeNextFeature();
 
-                  function writeNextFeature() {
+                    function writeNextFeature() {
+                        function readRecord() {
+                            reader.readRecord(function(error, feature) {
+                                if (feature == shp.end) {
+                                    // end stream
+                                    console.log(before+out+after);
+                                    // push remaining output and end
+                                    layerStream.push(out);
+                                    layerStream.push(after);
+                                    return layerStream.push(null);
+                                    shp.close()
+                                }
+                                if (!feature) return writeNextFeature();
+                                // console.log(feature);
+                                var featStr = JSON.stringify(feature);
 
-                      var feature = currentLayer.features.next();
-                      if (!feature) {
-                           console.log('no feature');
-                          // end stream
-                          if (nextLayer === layerCount) {
-                              console.log('at end');
-                              // push remaining output and end
-                              layerStream.push(out);
-                              layerStream.push(after);
-                              return layerStream.push(null);
-                          }
-                          getNextLayer();
-                          feature = currentLayer.features.next();
-                      }
+                                if (started) {
+                                    featStr = ',\n' + featStr;
+                                } else {
+                                    featStr = before + featStr;
+                                }
 
-                      try {
-                          var geom = feature.getGeometry();
-                        //   console.log(geom);
-                      } catch (e) {
-                          console.error('geom error');
-                          return writeNextFeature();
-                      }
+                                started = true;
+                                out += featStr;
 
-                      geom.transform(currentTransformation);
-                      var geojson = geom.toJSON();
-                      var fields = feature.fields.toJSON();
-                    //   console.log(geojson);
-                      var featStr = '{"type": "Feature", "properties": ' + fields + ',"geometry": ' + geojson + '}';
-
-                      if (started) {
-                          featStr = ',\n' + featStr;
-                      } else {
-                          featStr = before + featStr;
-                      }
-
-                      started = true;
-                      out += featStr;
-
-                      if (out.length >= size) {
-                          next(null, out);
-                      } else {
-                          writeNextFeature();
-                      }
-                  }
-
-                })
+                                if (out.length >= size) {
+                                    next(null, out);
+                                } else {
+                                    writeNextFeature();
+                                }
+                            });
+                        };
+                        if (firstTime) {
+                            firstTime = false;
+                            reader.readHeader(function() {
+                                readRecord();
+                            });
+                        }
+                        else readRecord();
+                    }
+                });
 
                 outStream.setReadable(layerStream);
                 outStream.end(after);
 
             }
         })
-        .catch(function (err) {
+        .catch(function(err) {
             outStream.destroy(err);
-        })
-    ;
+        });
 
     return outStream;
 };
