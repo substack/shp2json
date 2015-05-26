@@ -80,91 +80,103 @@ module.exports = function(inStream, opts) {
             s.on('end', next.ok.bind(null, files));
         })
         .seq(function(files) {
-            // console.log(files);
             if (files.length === 0) {
                 this('no .shp files found in the archive');
             } else if (shpFileFromArchive && files.indexOf(shpFileFromArchive) === -1) {
                 this('shpFileFromArchive: ' + shpFileFromArchive + 'does not exist in archive.');
             } else {
                 var maybeArrayBegining = '',
-                maybeArrayEnd = '',
-                maybeComma = '',
-                len = files.length;
+                    maybeArrayEnd = '',
+                    maybeComma = '',
+                    len = files.length,
+                    after = '',
+                    isFirstIteration = true,
+                    i = 0;
 
-                if(len > 1){
-                    maybeArrayBegining = '[';
-                    maybeComma = ',';
-                }
-                for(var i; i < len; i++){
-                    var filePath = files[i],
-                        isLast = i === len - 1;
-                    if(isLast)
-                        maybeArrayEnd = '[';
+                var filePath, isLast, reader, fileName, before, started, currentLayer,
+                    currentFeature, currentTransformation, firstTime, out;
+
+                function nextFile() {
+                    filePath = files[i];
+                    isLast = i === len - 1;
+                    if (len > 1 && i === 0) {
+                        maybeArrayBegining = '[';
+                        if(!isLast)
+                            maybeComma = ',';
+                    }
+
+                    if (isLast && len > 1)
+                        maybeArrayEnd = ']';
                     if (shpFileFromArchive)
                         files = [shpFileFromArchive];
 
-                    var reader = shp.reader(filePath, shapefileOpts);
-                    var fileName = filePath;
-                    for(var toRemove in ['.shp', tmpDir])
-                        fileName = filePath.remove(toRemove);
-                    var before = maybeArrayBegining + '{"type": "FeatureCollection","fileName": '
-                        + fileName + '"features": [\n';
-                    var after = '\n]}'+ maybeComma +'\n' + maybeArrayEnd;
-                    var started = false;
-                    var currentLayer, currentFeature, currentTransformation;
-                    var firstTime = true;
-                    var layerStream = from(function(size, next) {
-                        var out = '';
-                        writeNextFeature();
+                    reader = shp.reader(filePath, shapefileOpts);
+                    fileName = filePath;
+                    for (var toRemove in ['.shp', tmpDir])
+                        fileName = filePath.replace(toRemove,'');
 
-                        function writeNextFeature() {
-                            function readRecord() {
-                                reader.readRecord(function(error, feature) {
-                                    if (feature == shp.end) {
-                                        // end stream
-                                        // console.log(out+after);
-                                        // push remaining output and end
-                                        layerStream.push(out);
-                                        layerStream.push(after);
-                                        reader.close();
-                                        if(isLast)
-                                            return layerStream.push(null);
-                                    }
-                                    if (!feature) return writeNextFeature();
-                                    // console.log(feature);
-                                    var featStr = JSON.stringify(feature);
+                    before = maybeArrayBegining + '{"type": "FeatureCollection","fileName": "' + fileName + '", "features": [\n';
+                    after = '\n]}' + maybeComma + '\n' + maybeArrayEnd;
+                    started = false;
+                    firstTime = true;
 
-                                    if (started) {
-                                        featStr = ',\n' + featStr;
-                                    } else {
-                                        featStr = before + featStr;
-                                    }
-
-                                    started = true;
-                                    out += featStr;
-
-                                    if (out.length >= size) {
-                                        next(null, out);
-                                        out = '';
-                                    } else {
-                                        writeNextFeature();
-                                    }
-                                });
-                            };
-                            if (firstTime) {
-                                firstTime = false;
-                                reader.readHeader(function() {
-                                    readRecord();
-                                });
-                            }
-                            else readRecord();
-                        }
-                    });
+                    out = '';
                 }
+                nextFile();
+
+                var layerStream = from(function(size, next) {
+                    if (isFirstIteration){
+                        isFirstIteration = false;
+                        nextFile(0);
+                    }
+
+                    writeNextFeature();
+
+                    function writeNextFeature() {
+
+                        function readRecord() {
+                            reader.readRecord(function(error, feature) {
+                                if (feature == shp.end) {
+                                    i++;
+                                    layerStream.push(out);
+                                    layerStream.push(after);
+                                    reader.close();
+                                    if (isLast)
+                                        return layerStream.push(null);
+                                    return nextFile();
+                                }
+                                if (!feature) return writeNextFeature();
+                                // console.log(feature);
+                                var featStr = JSON.stringify(feature);
+
+                                if (started) {
+                                    featStr = ',\n' + featStr;
+                                } else {
+                                    featStr = before + featStr;
+                                }
+
+                                started = true;
+                                out += featStr;
+
+                                if (out.length >= size) {
+                                    next(null, out);
+                                    out = '';
+                                } else {
+                                    writeNextFeature();
+                                }
+                            });
+                        };
+                        if (firstTime) {
+                            firstTime = false;
+                            reader.readHeader(function() {
+                                readRecord();
+                            });
+                        } else readRecord();
+                    }
+                });
 
                 outStream.setReadable(layerStream);
                 outStream.end(after);
-
             }
         })
         .catch(function(err) {
