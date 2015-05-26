@@ -110,6 +110,8 @@ module.exports = function(inStream, opts) {
                         if(!isLast)
                             maybeComma = ',';
                     }
+                    else
+                        maybeArrayBegining = '';
 
                     if (isLast && len > 1){
                         maybeArrayEnd = ']';
