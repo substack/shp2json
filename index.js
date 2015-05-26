@@ -85,6 +85,9 @@ module.exports = function(inStream, opts) {
             } else if (shpFileFromArchive && files.indexOf(shpFileFromArchive) === -1) {
                 this('shpFileFromArchive: ' + shpFileFromArchive + 'does not exist in archive.');
             } else {
+                if (shpFileFromArchive)
+                    files = [shpFileFromArchive];
+
                 var maybeArrayBegining = '',
                     maybeArrayEnd = '',
                     maybeComma = '',
@@ -97,7 +100,10 @@ module.exports = function(inStream, opts) {
                     currentFeature, currentTransformation, firstTime, out;
 
                 function nextFile() {
+                    if(i >= len) return;
                     filePath = files[i];
+                    // console.log(i);
+                    // console.log(filePath);
                     isLast = i === len - 1;
                     if (len > 1 && i === 0) {
                         maybeArrayBegining = '[';
@@ -105,11 +111,11 @@ module.exports = function(inStream, opts) {
                             maybeComma = ',';
                     }
 
-                    if (isLast && len > 1)
+                    if (isLast && len > 1){
                         maybeArrayEnd = ']';
-                    if (shpFileFromArchive)
-                        files = [shpFileFromArchive];
-
+                        maybeComma = '';
+                    }
+                    // console.log('reading next file: ' +  filePath);
                     reader = shp.reader(filePath, shapefileOpts);
                     fileName = filePath;
                     for (var toRemove in ['.shp', tmpDir])
@@ -125,10 +131,6 @@ module.exports = function(inStream, opts) {
                 nextFile();
 
                 var layerStream = from(function(size, next) {
-                    if (isFirstIteration){
-                        isFirstIteration = false;
-                        nextFile(0);
-                    }
 
                     writeNextFeature();
 
@@ -141,11 +143,14 @@ module.exports = function(inStream, opts) {
                                     layerStream.push(out);
                                     layerStream.push(after);
                                     reader.close();
-                                    if (isLast)
+                                    if (isLast){
+                                        // console.log('isLast');
                                         return layerStream.push(null);
-                                    return nextFile();
+                                    }
+                                    nextFile();
+                                    return writeNextFeature();
                                 }
-                                if (!feature) return writeNextFeature();
+                                // if (!feature) return writeNextFeature();
                                 // console.log(feature);
                                 var featStr = JSON.stringify(feature);
 
@@ -182,6 +187,6 @@ module.exports = function(inStream, opts) {
         .catch(function(err) {
             outStream.destroy(err);
         });
-
+    // return;
     return outStream;
 };
