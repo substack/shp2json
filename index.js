@@ -83,67 +83,84 @@ module.exports = function(inStream, opts) {
             // console.log(files);
             if (files.length === 0) {
                 this('no .shp files found in the archive');
-            } else if (files.length > 2 && !shpFileFromArchive) { //2 to account for .dbf
-                this('multiple .shp files found in the archive,' + ' expecting a single file');
             } else if (shpFileFromArchive && files.indexOf(shpFileFromArchive) === -1) {
                 this('shpFileFromArchive: ' + shpFileFromArchive + 'does not exist in archive.');
             } else {
-                if (shpFileFromArchive)
-                    files = [shpFileFromArchive];
-                // console.log("importing file: " + files[0]);
-                var reader = shp.reader(files[0], shapefileOpts);
+                var maybeArrayBegining = '',
+                maybeArrayEnd = '',
+                maybeComma = '',
+                len = files.length;
 
-                var before = '{"type": "FeatureCollection","features": [\n';
-                var after = '\n]}\n';
-                var started = false;
-                var currentLayer, currentFeature, currentTransformation;
-                var firstTime = true;
-                var layerStream = from(function(size, next) {
-                    var out = '';
-                    writeNextFeature();
+                if(len > 1){
+                    maybeArrayBegining = '[';
+                    maybeComma = ',';
+                }
+                for(var i; i < len; i++){
+                    var filePath = files[i],
+                        isLast = i === len - 1;
+                    if(isLast)
+                        maybeArrayEnd = '[';
+                    if (shpFileFromArchive)
+                        files = [shpFileFromArchive];
 
-                    function writeNextFeature() {
-                        function readRecord() {
-                            reader.readRecord(function(error, feature) {
-                                if (feature == shp.end) {
-                                    // end stream
-                                    // console.log(out+after);
-                                    // push remaining output and end
-                                    layerStream.push(out);
-                                    layerStream.push(after);
-                                    reader.close()
-                                    return layerStream.push(null);
-                                }
-                                if (!feature) return writeNextFeature();
-                                // console.log(feature);
-                                var featStr = JSON.stringify(feature);
+                    var reader = shp.reader(filePath, shapefileOpts);
+                    var fileName = filePath;
+                    for(var toRemove in ['.shp', tmpDir])
+                        fileName = filePath.remove(toRemove);
+                    var before = maybeArrayBegining + '{"type": "FeatureCollection","fileName": '
+                        + fileName + '"features": [\n';
+                    var after = '\n]}'+ maybeComma +'\n' + maybeArrayEnd;
+                    var started = false;
+                    var currentLayer, currentFeature, currentTransformation;
+                    var firstTime = true;
+                    var layerStream = from(function(size, next) {
+                        var out = '';
+                        writeNextFeature();
 
-                                if (started) {
-                                    featStr = ',\n' + featStr;
-                                } else {
-                                    featStr = before + featStr;
-                                }
+                        function writeNextFeature() {
+                            function readRecord() {
+                                reader.readRecord(function(error, feature) {
+                                    if (feature == shp.end) {
+                                        // end stream
+                                        // console.log(out+after);
+                                        // push remaining output and end
+                                        layerStream.push(out);
+                                        layerStream.push(after);
+                                        reader.close();
+                                        if(isLast)
+                                            return layerStream.push(null);
+                                    }
+                                    if (!feature) return writeNextFeature();
+                                    // console.log(feature);
+                                    var featStr = JSON.stringify(feature);
 
-                                started = true;
-                                out += featStr;
+                                    if (started) {
+                                        featStr = ',\n' + featStr;
+                                    } else {
+                                        featStr = before + featStr;
+                                    }
 
-                                if (out.length >= size) {
-                                    next(null, out);
-                                    out = '';
-                                } else {
-                                    writeNextFeature();
-                                }
-                            });
-                        };
-                        if (firstTime) {
-                            firstTime = false;
-                            reader.readHeader(function() {
-                                readRecord();
-                            });
+                                    started = true;
+                                    out += featStr;
+
+                                    if (out.length >= size) {
+                                        next(null, out);
+                                        out = '';
+                                    } else {
+                                        writeNextFeature();
+                                    }
+                                });
+                            };
+                            if (firstTime) {
+                                firstTime = false;
+                                reader.readHeader(function() {
+                                    readRecord();
+                                });
+                            }
+                            else readRecord();
                         }
-                        else readRecord();
-                    }
-                });
+                    });
+                }
 
                 outStream.setReadable(layerStream);
                 outStream.end(after);
