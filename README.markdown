@@ -1,6 +1,7 @@
 shp2jsonx
 ========
 
+
 This project is a fork of substack's [shp2json](https://github.com/substack/shp2json) and combines ideas and code from mbostock [shapefile](https://github.com/mbostock/shapefile) and calvinmetcalf's [shapefile-js](https://github.com/calvinmetcalf/shapefile-js).
 
 Convert shapefile zip archives to streaming GeoJSON using
