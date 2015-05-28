@@ -1,6 +1,38 @@
 #!/usr/bin/env node
 var fs = require('fs');
 var toJSON = require('../');
+var opts = null;
+
+optsToShift = [
+  {cli:'-x', option:'xList'},
+  {cli:'-a', option:'shpFileFromArchive'},
+  {cli:'-i', option:'ignoreProperties'},
+  {cli:'-e', option:'encoding'}
+];
+
+//remove options to keep same exsiting cli format
+optsToShift.forEach(function(o){
+    index = process.argv.indexOf(o.cli);
+    if(index < 0) return;
+    indexOfVal = index + 1;
+    //protect against no value and options next to options (-a -x)
+    // console.log("indexOfVal: " + indexOfVal);
+    // console.log("process.argv.length: " + process.argv.length);
+    // console.log("process.argv[indexOfVal]: " + process.argv[indexOfVal]);
+
+    if(indexOfVal >= process.argv.length || process.argv[indexOfVal].indexOf('-') > -1){
+        console.error('Error: invalid option value.');
+        process.exit(1);
+    }
+    if(index > 0){
+        if(!opts)
+            opts = {};
+        opts[o.option] = process.argv[indexOfVal];
+        [index, indexOfVal].forEach(function(remove,i){
+            process.argv.splice(remove-i,1);
+        });
+    }
+});
 
 if (process.argv.slice(2).join(' ') === '-h') {
     console.log('Usage: shp2json {infile|-} {outfile|-}');
@@ -19,8 +51,8 @@ var outStream = outFile === '-'
     : fs.createWriteStream(outFile)
 ;
 
-
-var converter = toJSON(inStream)
+// console.log(opts);
+var converter = toJSON(inStream, opts)
 
 converter.on('error', function(e) {
   console.error('Error:', e)

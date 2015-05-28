@@ -1,14 +1,14 @@
 {
-  "name": "shp2json",
-  "description": "Convert shapefile zip archives into GeoJSON using ogr2ogr with a streaming interface",
-  "version": "1.1.0",
+  "name": "shp2jsonx",
+  "description": "Convert shapefile zip archives into GeoJSON using a streaming interface",
+  "version": "1.0.1",
   "repository": {
     "type": "git",
-    "url": "git://github.com/substack/shp2json.git"
+    "url": "git://github.com/realtymaps/shp2jsonx.git"
   },
   "main": "index.js",
   "bin": {
-    "shp2json": "bin/cli.js"
+    "shp2jsonx": "bin/cli.js"
   },
   "keywords": [
     "shapefile",
@@ -33,9 +33,9 @@
     "duplexify": "^3.2.0",
     "findit": "0.1.x",
     "from2": "^1.2.0",
-    "gdal": "^0.4.1",
     "morestreams": "0.1.x",
     "seq": "0.3.x",
+    "shapefile": "^0.3.0",
     "through2": "^0.6.2"
   },
   "devDependencies": {
@@ -46,7 +46,8 @@
     "node": ">=0.10.0"
   },
   "license": "MIT",
-  "author": {
+  "author":"RealtyMapster LLC",
+  "original author": {
     "name": "James Halliday",
     "email": "mail@substack.net",
     "url": "http://substack.net"

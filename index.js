@@ -1,16 +1,46 @@
 var spawn = require('child_process').spawn;
-var gdal = require('gdal');
+var exec = require('child_process').exec;
+var shp = require('shapefile');
 var fs = require('fs');
 var path = require('path');
 var seq = require('seq');
 var findit = require('findit');
 var duplex = require('duplexify')
 var from = require('from2');
+var xList = null;
+var shpFileFromArchive = null;
+var shapefileOpts = {};
 
-module.exports = function (inStream) {
-    var id = Math.floor(Math.random() * (1<<30)).toString(16);
+var _parseOptions = function(opts) {
+    if (opts && typeof(opts) === 'object') {
+        if (opts.hasOwnProperty('shpFileFromArchive') && typeof(opts.shpFileFromArchive) === 'string')
+            shpFileFromArchive = opts.shpFileFromArchive;
+        if (opts.hasOwnProperty('xList')) {
+            if (typeof(opts.xList) === 'string')
+                xList = opts.xList.replace(/,/g);
+            if (Array.isArray(opts.xList))
+                xList = opts.xList.join(' ');
+        }
+        if (opts.hasOwnProperty('ignoreProperties')) {
+            if (typeof(opts.ignoreProperties) === 'string')
+                shapefileOpts['ignore-properties'] = opts.ignoreProperties === 'true';
+            if (typeof(opts.ignoreProperties) === 'boolean')
+                shapefileOpts['ignore-properties'] = opts.ignoreProperties;
+        }
+        if (opts.hasOwnProperty('xList')) {
+            if (typeof(opts.encoding) === 'string')
+                shapefileOpts.encoding = opts.encoding;
+        }
+    }
+};
+
+module.exports = function(inStream, opts) {
+    var id = Math.floor(Math.random() * (1 << 30)).toString(16);
     var tmpDir = path.join('/tmp', id);
     var zipFile = path.join('/tmp', id + '.zip');
+    _parseOptions(opts);
+    if (shpFileFromArchive)
+        shpFileFromArchive = tmpDir + '/' + shpFileFromArchive;
 
     var outStream = duplex.obj();
 
@@ -19,110 +49,146 @@ module.exports = function (inStream) {
     zipStream.on('error', outStream.destroy);
 
     seq()
-        .par(function () { fs.mkdir(tmpDir, 0700, this) })
-        .par(function () {
-            if (zipStream.closed) this()
-            else zipStream.on('close', this.ok)
+        .par(function() {
+            fs.mkdir(tmpDir, 0700, this);
         })
-        .seq_(function (next) {
-            var ps = spawn('unzip', [ '-d', tmpDir, zipFile ]);
-            ps.on('exit', function (code) {
+        .par(function() {
+            if (zipStream.closed) this();
+            else zipStream.on('close', this);
+        })
+        .seq_(function(next) {
+            // console.log(xList);
+            var ps = null;
+            if (!xList) {
+                ps = spawn('unzip', ['-d', tmpDir, zipFile]);
+            } else {
+                var toRun = 'unzip ' + zipFile + ' -d ' + tmpDir + ' -x ' + xList;
+                ps = exec(toRun);
+            }
+
+            ps.on('exit', function(code) {
                 next(code < 3 ? null : 'error in unzip: code ' + code)
             });
         })
-        .seq_(function (next) {
+        .seq_(function(next) {
             var s = findit(tmpDir);
             var files = [];
-            s.on('file', function (file) {
+            s.on('file', function(file) {
                 if (file.match(/__MACOSX/)) return;
                 if (file.match(/\.shp$|\.kml$/i)) files.push(file);
             });
             s.on('end', next.ok.bind(null, files));
         })
-        .seq(function (files) {
+        .seq(function(files) {
             if (files.length === 0) {
                 this('no .shp files found in the archive');
-            }
-            else if (files.length > 1) {
-                this('multiple .shp files found in the archive,'
-                    + ' expecting a single file')
-            }
-            else {
-                var shp = gdal.open(files[0]);
-                var layerCount = shp.layers.count();
+            } else if (shpFileFromArchive && files.indexOf(shpFileFromArchive) === -1) {
+                this('shpFileFromArchive: ' + shpFileFromArchive + 'does not exist in archive.');
+            } else {
+                if (shpFileFromArchive)
+                    files = [shpFileFromArchive];
 
-                var before = '{"type": "FeatureCollection","features": [\n';
-                var after = '\n]}\n';
-                var started = false;
-                var currentLayer, currentFeature, currentTransformation;
-                var nextLayer = 0;
+                var maybeArrayBegining = '',
+                    maybeArrayEnd = '',
+                    maybeComma = '',
+                    len = files.length,
+                    after = '',
+                    isFirstIteration = true,
+                    i = 0;
 
-                var to = gdal.SpatialReference.fromEPSG(4326);
+                var filePath, isLast, reader, fileName, before, started, currentLayer,
+                    currentFeature, currentTransformation, firstTime, out;
 
-                function getNextLayer() {
-                  currentLayer = shp.layers.get(nextLayer++);
-                  var srs = currentLayer.srs || gdal.SpatialReference.fromEPSG(4326);
-                  currentTransformation = new gdal.CoordinateTransformation(srs, to);
+                function nextFile() {
+                    if(i >= len) return;
+                    filePath = files[i];
+                    // console.log(i);
+                    // console.log(filePath);
+                    isLast = i === len - 1;
+                    if (len > 1 && i === 0) {
+                        maybeArrayBegining = '[';
+                        if(!isLast)
+                            maybeComma = ',';
+                    }
+                    else
+                        maybeArrayBegining = '';
+
+                    if (isLast && len > 1){
+                        maybeArrayEnd = ']';
+                        maybeComma = '';
+                    }
+                    // console.log('reading next file: ' +  filePath);
+                    reader = shp.reader(filePath, shapefileOpts);
+                    fileName = filePath;
+                    for (var toRemove in ['.shp', tmpDir])
+                        fileName = filePath.replace(toRemove,'');
+
+                    before = maybeArrayBegining + '{"type": "FeatureCollection","fileName": "' + fileName + '", "features": [\n';
+                    after = '\n]}' + maybeComma + '\n' + maybeArrayEnd;
+                    started = false;
+                    firstTime = true;
+
+                    out = '';
                 }
-
-                getNextLayer();
+                nextFile();
 
                 var layerStream = from(function(size, next) {
-                  var out = '';
-                  writeNextFeature();
 
-                  function writeNextFeature() {
-                      var feature = currentLayer.features.next();
-                      if (!feature) {
-                          // end stream
-                          if (nextLayer === layerCount) {
-                              // push remaining output and end
-                              layerStream.push(out);
-                              layerStream.push(after);
-                              return layerStream.push(null);
-                          }
-                          getNextLayer();
-                          feature = currentLayer.features.next();
-                      }
+                    writeNextFeature();
 
-                      try {
-                          var geom = feature.getGeometry();
-                      } catch (e) {
-                          return writeNextFeature();
-                      }
+                    function writeNextFeature() {
 
-                      geom.transform(currentTransformation);
-                      var geojson = geom.toJSON();
-                      var fields = feature.fields.toJSON();
-                      var featStr = '{"type": "Feature", "properties": ' + fields + ',"geometry": ' + geojson + '}';
+                        function readRecord() {
+                            reader.readRecord(function(error, feature) {
+                                if (feature == shp.end) {
+                                    i++;
+                                    layerStream.push(out);
+                                    layerStream.push(after);
+                                    reader.close();
+                                    if (isLast){
+                                        // console.log('isLast');
+                                        return layerStream.push(null);
+                                    }
+                                    nextFile();
+                                    return writeNextFeature();
+                                }
+                                // if (!feature) return writeNextFeature();
+                                // console.log(feature);
+                                var featStr = JSON.stringify(feature);
 
-                      if (started) {
-                          featStr = ',\n' + featStr;
-                      } else {
-                          featStr = before + featStr;
-                      }
+                                if (started) {
+                                    featStr = ',\n' + featStr;
+                                } else {
+                                    featStr = before + featStr;
+                                }
 
-                      started = true;
-                      out += featStr;
+                                started = true;
+                                out += featStr;
 
-                      if (out.length >= size) {
-                          next(null, out);
-                      } else {
-                          writeNextFeature();
-                      }
-                  }
-
-                })
+                                if (out.length >= size) {
+                                    next(null, out);
+                                    out = '';
+                                } else {
+                                    writeNextFeature();
+                                }
+                            });
+                        };
+                        if (firstTime) {
+                            firstTime = false;
+                            reader.readHeader(function() {
+                                readRecord();
+                            });
+                        } else readRecord();
+                    }
+                });
 
                 outStream.setReadable(layerStream);
                 outStream.end(after);
-
             }
         })
-        .catch(function (err) {
+        .catch(function(err) {
             outStream.destroy(err);
-        })
-    ;
-
+        });
+    // return;
     return outStream;
 };
