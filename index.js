@@ -50,11 +50,11 @@ module.exports = function(inStream, opts) {
 
     seq()
         .par(function() {
-            fs.mkdir(tmpDir, 0700, this)
+            fs.mkdir(tmpDir, 0700, this);
         })
         .par(function() {
-            if (zipStream.closed) this()
-            else zipStream.on('close', this.ok)
+            if (zipStream.closed) this();
+            else zipStream.on('close', this);
         })
         .seq_(function(next) {
             // console.log(xList);
