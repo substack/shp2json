@@ -19,6 +19,10 @@ shp2json.js
 var toJSON = require('shp2json');
 toJSON(process.stdin).pipe(process.stdout);
 process.stdin.resume();
+
+// or
+
+toJSON.fromShpFile('./data/from_files/shape.shp').pipe(process.stdout);
 ```
 
 shp2json command

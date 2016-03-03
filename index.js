@@ -131,4 +131,6 @@ function fromShpFile (file, outStream) {
 
     outStream.setReadable(layerStream);
     outStream.end(after);
+
+    return outStream;
 }
