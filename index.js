@@ -48,75 +48,7 @@ module.exports = function (inStream) {
                     + ' expecting a single file')
             }
             else {
-                var shp = gdal.open(files[0]);
-                var layerCount = shp.layers.count();
-
-                var before = '{"type": "FeatureCollection","features": [\n';
-                var after = '\n]}\n';
-                var started = false;
-                var currentLayer, currentFeature, currentTransformation;
-                var nextLayer = 0;
-
-                var to = gdal.SpatialReference.fromEPSG(4326);
-
-                function getNextLayer() {
-                  currentLayer = shp.layers.get(nextLayer++);
-                  var srs = currentLayer.srs || gdal.SpatialReference.fromEPSG(4326);
-                  currentTransformation = new gdal.CoordinateTransformation(srs, to);
-                }
-
-                getNextLayer();
-
-                var layerStream = from(function(size, next) {
-                  var out = '';
-                  writeNextFeature();
-
-                  function writeNextFeature() {
-                      var feature = currentLayer.features.next();
-                      if (!feature) {
-                          // end stream
-                          if (nextLayer === layerCount) {
-                              // push remaining output and end
-                              layerStream.push(out);
-                              layerStream.push(after);
-                              return layerStream.push(null);
-                          }
-                          getNextLayer();
-                          feature = currentLayer.features.next();
-                      }
-
-                      try {
-                          var geom = feature.getGeometry();
-                      } catch (e) {
-                          return writeNextFeature();
-                      }
-
-                      geom.transform(currentTransformation);
-                      var geojson = geom.toJSON();
-                      var fields = feature.fields.toJSON();
-                      var featStr = '{"type": "Feature", "properties": ' + fields + ',"geometry": ' + geojson + '}';
-
-                      if (started) {
-                          featStr = ',\n' + featStr;
-                      } else {
-                          featStr = before + featStr;
-                      }
-
-                      started = true;
-                      out += featStr;
-
-                      if (out.length >= size) {
-                          next(null, out);
-                      } else {
-                          writeNextFeature();
-                      }
-                  }
-
-                })
-
-                outStream.setReadable(layerStream);
-                outStream.end(after);
-
+                fromShpFile(files[0], outStream)
             }
         })
         .catch(function (err) {
@@ -126,3 +58,77 @@ module.exports = function (inStream) {
 
     return outStream;
 };
+
+module.exports.fromShpFile = fromShpFile
+
+function fromShpFile (file, outStream) {
+    outStream = outStream || duplex.obj();
+    var shp = gdal.open(file);
+    var layerCount = shp.layers.count();
+
+    var before = '{"type": "FeatureCollection","features": [\n';
+    var after = '\n]}\n';
+    var started = false;
+    var currentLayer, currentFeature, currentTransformation;
+    var nextLayer = 0;
+
+    var to = gdal.SpatialReference.fromEPSG(4326);
+
+    function getNextLayer() {
+      currentLayer = shp.layers.get(nextLayer++);
+      var srs = currentLayer.srs || gdal.SpatialReference.fromEPSG(4326);
+      currentTransformation = new gdal.CoordinateTransformation(srs, to);
+    }
+
+    getNextLayer();
+
+    var layerStream = from(function(size, next) {
+      var out = '';
+      writeNextFeature();
+
+      function writeNextFeature() {
+          var feature = currentLayer.features.next();
+          if (!feature) {
+              // end stream
+              if (nextLayer === layerCount) {
+                  // push remaining output and end
+                  layerStream.push(out);
+                  layerStream.push(after);
+                  return layerStream.push(null);
+              }
+              getNextLayer();
+              feature = currentLayer.features.next();
+          }
+
+          try {
+              var geom = feature.getGeometry();
+          } catch (e) {
+              return writeNextFeature();
+          }
+
+          geom.transform(currentTransformation);
+          var geojson = geom.toJSON();
+          var fields = feature.fields.toJSON();
+          var featStr = '{"type": "Feature", "properties": ' + fields + ',"geometry": ' + geojson + '}';
+
+          if (started) {
+              featStr = ',\n' + featStr;
+          } else {
+              featStr = before + featStr;
+          }
+
+          started = true;
+          out += featStr;
+
+          if (out.length >= size) {
+              next(null, out);
+          } else {
+              writeNextFeature();
+          }
+      }
+
+    })
+
+    outStream.setReadable(layerStream);
+    outStream.end(after);
+}
