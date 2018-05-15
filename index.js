@@ -106,8 +106,11 @@ function fromShpFile (file, outStream) {
               return writeNextFeature();
           }
 
-          geom.transform(currentTransformation);
-          var geojson = geom.toJSON();
+          var geojson=null;
+          if (geom && geom.transform) {
+            geom.transform(currentTransformation);
+            geojson = geom.toJSON();
+          }
           var fields = feature.fields.toJSON();
           var featStr = '{"type": "Feature", "properties": ' + fields + ',"geometry": ' + geojson + '}';
 
